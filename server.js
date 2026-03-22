@@ -1,26 +1,63 @@
-'use strict';
-
-const express = require('express');
-const cors = require('cors');
-
-const auth = require('./auth'); // Updated path
-const user = require('./user'); // Updated path
-const product = require('./product'); // Updated path
-const order = require('./order'); // Updated path
-const payment = require('./payment'); // Updated path
+// ══════════════════════════════════════════════════════════
+//  MITTI AI  —  Express Server  v4.0
+//  Production-ready: Security · Logging · Rate Limiting
+// ══════════════════════════════════════════════════════════
+require('dotenv').config();
+const express      = require('express');
+const cors         = require('cors');
+const helmet       = require('helmet');
+const morgan       = require('morgan');
+const compression  = require('compression');
+const rateLimit    = require('express-rate-limit');
 
 const app = express();
+const PORT = process.env.PORT || 5000;
 
-app.use(cors());
-app.use(express.json());
+// ── Security Middleware ───────────────────────────────────
+app.use(helmet());
+app.use(cors({
+  origin: [process.env.FRONTEND_URL || 'http://localhost:3000', 'https://mitti-ai.vercel.app'],
+  credentials: true,
+}));
+app.use(compression());
+app.use(morgan('combined'));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
 
-app.use('/auth', auth);
-app.use('/user', user);
-app.use('/product', product);
-app.use('/order', order);
-app.use('/payment', payment);
+// ── Rate Limiting ─────────────────────────────────────────
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, message: { error: 'Too many requests' } });
+const aiLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, message: { error: 'AI rate limit: 20 req/min' } });
+app.use('/api/', limiter);
+app.use('/api/ai/', aiLimiter);
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+// ── Routes ────────────────────────────────────────────────
+// FIXED: Removed './routes/' from paths - files are in root directory
+app.use('/api/auth',          require('./auth'));
+app.use('/api/user',          require('./user'));
+app.use('/api/ai',            require('./ai'));
+app.use('/api/soil',          require('./soil'));
+app.use('/api/crop',          require('./crop'));
+app.use('/api/mandi',         require('./mandi'));
+app.use('/api/market',        require('./market'));
+app.use('/api/weather',       require('./weather'));
+app.use('/api/schemes',       require('./schemes'));
+app.use('/api/admin',         require('./admin'));
+app.use('/api/notifications', require('./notifications'));
+
+// ── Health Check ──────────────────────────────────────────
+app.get('/health', (req, res) => res.json({
+  status: 'OK', service: 'MITTI AI Backend', version: '4.0.0',
+  uptime: process.uptime(), timestamp: new Date().toISOString(),
+}));
+
+// ── 404 Handler ───────────────────────────────────────────
+app.use((req, res) => res.status(404).json({ error: `Route ${req.method} ${req.path} not found` }));
+
+// ── Error Handler ─────────────────────────────────────────
+app.use((error, req, res, next) => {
+  console.error('Unhandled error:', error);
+  res.status(500).json({ error: 'Internal server error', message: process.env.NODE_ENV === 'development' ? error.message : undefined });
 });
+
+app.listen(PORT, () => console.log(`\n🌱 MITTI AI Backend v4.0\n🚀 Running on http://localhost:${PORT}\n📊 Health: http://localhost:${PORT}/health\n`));
+module.exports = app;
