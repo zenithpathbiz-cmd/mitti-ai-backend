@@ -1,0 +1,235 @@
+// ══════════════════════════════════════════════
+//  MITTI AI — PostgreSQL Schema (Prisma ORM)
+// ══════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Users (Farmers) ───────────────────────────
+model User {
+  id          String   @id @default(cuid())
+  phone       String   @unique
+  name        String?
+  village     String?
+  district    String?
+  state       String   @default("Bihar")
+  language    Language @default(HINDI)
+  deviceToken String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  soilTests   SoilTest[]
+  queries     Query[]
+  orders      Order[]
+  listings    Listing[]
+  otpCodes    OtpCode[]
+
+  @@map("users")
+}
+
+enum Language {
+  HINDI
+  BHOJPURI
+  ENGLISH
+}
+
+// ── OTP Codes ─────────────────────────────────
+model OtpCode {
+  id        String   @id @default(cuid())
+  userId    String?
+  phone     String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@map("otp_codes")
+}
+
+// ── Soil Tests ────────────────────────────────
+model SoilTest {
+  id           String   @id @default(cuid())
+  userId       String
+  nitrogen     Float
+  phosphorus   Float
+  potassium    Float
+  ph           Float?
+  organic      Float?
+  aiReport     String?  // AI-generated report text
+  cropSuggestions String[] // Array of suggested crops
+  fertilizerPlan  String?
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@map("soil_tests")
+}
+
+// ── AI Queries ────────────────────────────────
+model Query {
+  id         String      @id @default(cuid())
+  userId     String
+  type       QueryType
+  input      String      // user question
+  response   String      // AI response
+  language   Language    @default(HINDI)
+  isVoice    Boolean     @default(false)
+  duration   Int?        // response time in ms
+  satisfied  Boolean?    // user feedback
+  createdAt  DateTime    @default(now())
+  user       User        @relation(fields: [userId], references: [id])
+
+  @@map("queries")
+}
+
+enum QueryType {
+  GENERAL
+  CROP_ADVISORY
+  SOIL_HEALTH
+  WEATHER
+  MANDI_PRICE
+  DISEASE_DETECTION
+  GOVT_SCHEME
+}
+
+// ── Marketplace Listings ──────────────────────
+model Listing {
+  id          String        @id @default(cuid())
+  userId      String
+  cropName    String
+  quantity    Float         // in quintals
+  pricePerQ   Float         // price per quintal
+  unit        String        @default("quintal")
+  description String?
+  district    String?
+  imageUrl    String?
+  status      ListingStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  user        User          @relation(fields: [userId], references: [id])
+  orderItems  OrderItem[]
+
+  @@map("listings")
+}
+
+enum ListingStatus {
+  ACTIVE
+  SOLD
+  EXPIRED
+  CANCELLED
+}
+
+// ── Orders ────────────────────────────────────
+model Order {
+  id          String      @id @default(cuid())
+  buyerId     String
+  totalAmount Float
+  status      OrderStatus @default(PENDING)
+  paymentMode String?     // UPI, CASH, BANK
+  paymentRef  String?
+  address     String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  buyer       User        @relation(fields: [buyerId], references: [id])
+  items       OrderItem[]
+
+  @@map("orders")
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  listingId String
+  quantity  Float
+  price     Float
+  order     Order   @relation(fields: [orderId], references: [id])
+  listing   Listing @relation(fields: [listingId], references: [id])
+
+  @@map("order_items")
+}
+
+// ── Mandi Rates ───────────────────────────────
+model MandiRate {
+  id        String   @id @default(cuid())
+  cropName  String
+  minPrice  Float
+  maxPrice  Float
+  modalPrice Float
+  market    String
+  district  String
+  state     String   @default("Bihar")
+  date      DateTime @default(now())
+  source    String   @default("agmarknet") // agmarknet | ai | manual
+  createdAt DateTime @default(now())
+
+  @@unique([cropName, market, date])
+  @@map("mandi_rates")
+}
+
+// ── Crop Data ─────────────────────────────────
+model Crop {
+  id          String @id @default(cuid())
+  name        String @unique
+  nameHindi   String
+  nameBhojpuri String?
+  season      String
+  duration    Int    // days to harvest
+  yieldPerAcre Float
+  minTemp     Float
+  maxTemp     Float
+  waterReq    String
+  soilType    String
+  fertilizerNPK String
+  commonDiseases String[]
+  marketPrice Float   // approximate
+
+  @@map("crops")
+}
+
+// ── Govt Schemes ──────────────────────────────
+model GovtScheme {
+  id          String   @id @default(cuid())
+  name        String
+  nameHindi   String
+  type        String   // central | state
+  benefit     String
+  maxAmount   Float?
+  deadline    DateTime?
+  eligibility String
+  documents   String[]
+  applyUrl    String?
+  helpline    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@map("govt_schemes")
+}
+
+// ── Notifications ─────────────────────────────
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String?  // null = broadcast to all
+  title     String
+  body      String
+  icon      String?
+  type      String   // weather | price | scheme | general
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}
