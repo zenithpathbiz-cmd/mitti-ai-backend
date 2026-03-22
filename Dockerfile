@@ -12,4 +12,4 @@ COPY --from=deps    /app/node_modules ./node_modules
 COPY . .
 RUN mkdir -p logs
 EXPOSE 5000
-CMD ["node","src/server.js"]
+CMD ["node","server.js"]
