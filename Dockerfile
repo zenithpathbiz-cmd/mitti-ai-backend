@@ -6,16 +6,9 @@ FROM base AS deps
 COPY package*.json ./
 RUN npm install --only=production
 
-FROM base AS builder
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npx prisma generate
-
 FROM base AS runner
 ENV NODE_ENV=production
 COPY --from=deps    /app/node_modules ./node_modules
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY . .
 RUN mkdir -p logs
 EXPOSE 5000
