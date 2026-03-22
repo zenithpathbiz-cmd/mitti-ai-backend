@@ -4,12 +4,19 @@ RUN apk add --no-cache openssl
 
 FROM base AS deps
 COPY package*.json ./
-RUN npm install --only=production
+RUN npm ci --only=production
+
+FROM base AS builder
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npx prisma generate
 
 FROM base AS runner
 ENV NODE_ENV=production
 COPY --from=deps    /app/node_modules ./node_modules
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY . .
 RUN mkdir -p logs
 EXPOSE 5000
-CMD ["node","server.js"]
+CMD ["node","src/server.js"]
