@@ -1,0 +1,48 @@
+version: '3.9'
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mitti_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     mitti_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-mitti_secure_pass}
+      POSTGRES_DB:       mitti_ai_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U mitti_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: mitti_redis
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    ports:
+      - "6379:6379"
+
+  api:
+    build: .
+    container_name: mitti_api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://mitti_user:${DB_PASSWORD:-mitti_secure_pass}@postgres:5432/mitti_ai_db
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: sh -c "npx prisma migrate deploy && node src/server.js"
+
+volumes:
+  pgdata:
+  redisdata:
